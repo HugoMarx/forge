@@ -1,2 +1,2 @@
 # Forge
-A TUI that helps you navigate and spin your daily dev projects.
+A fast TUI to browse, launch, and manage your local dev projects.
