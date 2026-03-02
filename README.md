@@ -1,2 +1,2 @@
-# forge
-A TUI that helps you navigate your dev projects 
+# Forge
+A TUI that helps you navigate and spin your daily dev projects.
