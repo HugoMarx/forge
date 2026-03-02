@@ -86,8 +86,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case "enter":
 			project := m.table.SelectedRow()[0]
-			// return m, internals.RunCommand("ls", "-la", internals.RootDir+"/"+m.table.SelectedRow()[0])
-			return m, internals.RunCommand(project, "code", internals.RootDir+"/"+project)
+			return m, internals.RunCommand(project, "ghostty", "-e", "hx", internals.RootDir+"/"+project)
 		case "j":
 			m.output.HalfPageDown()
 			return m, nil
@@ -101,7 +100,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		columns := []table.Column{
 			{Title: "Projet", Width: int(float64(totalWidth) * 0.8)},
-			{Title: "Projet", Width: int(float64(totalWidth) * 0.1)},
+			{Title: "Modified", Width: int(float64(totalWidth) * 0.1)},
 			{Title: "Size", Width: int(float64(totalWidth) * 0.1)},
 		}
 
@@ -111,9 +110,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.output.SetWidth(msg.Width - 2)
 		m.output.SetHeight(msg.Height / 3)
 
-	case internals.CommandOutputMsg:
+	case internals.CommandSuccessMsg:
 		content := m.output.GetContent()
-		content += fmt.Sprintf("Projet %s ouvert dans VsCode !\n", msg.ProjectName)
+		content += fmt.Sprintf("Projet %s ouvert dans votre IDE préféré !\n", msg.ProjectName)
 		m.output.SetContent(content)
 		return m, nil
 

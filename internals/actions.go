@@ -1,26 +1,34 @@
 package internals
 
 import (
-	"fmt"
 	"os/exec"
 
 	tea "charm.land/bubbletea/v2"
 )
 
-type CommandOutputMsg struct {
-	OutputContent string
-	ProjectName   string
-	ProjectPath   string
+type CommandSuccessMsg struct {
+	output any
+
 }
 
-func RunCommand(project string, command string, args ...string) tea.Cmd {
+type CmdErrorMsg struct {
+	error error
+}
+
+func LauchWorkspace(projectPath string) tea.Msg {
+	msg := RunCommand("ghossty", "-e", projectPath)
+	msg.output = ""
+	return msg
+}
+
+func RunCommand(command string, args ...string) tea.Cmd {
 	return func() tea.Msg {
 		cmd := exec.Command(command, args...)
-		output, err := cmd.CombinedOutput()
+		err := cmd.Start()
 		if err != nil {
-			return fmt.Errorf("error while executing specified command : %v", err)
+			return CmdErrorMsg{err}
 		}
-		path := RootDir + "/" + project
-		return CommandOutputMsg{string(output) , project , path}
+
+		return CommandSuccessMsg{}
 	}
 }
