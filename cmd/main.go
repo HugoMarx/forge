@@ -10,6 +10,7 @@ import (
 	"charm.land/lipgloss/v2"
 
 	"hugom/forge/internals"
+	"hugom/forge/internals/projects"
 )
 
 var baseStyle = lipgloss.NewStyle().
@@ -48,7 +49,7 @@ func initialModel() model {
 		Foreground(lipgloss.Color("229")).
 		Background(lipgloss.Color("57")). //#ff4d43 Forge Red
 		Bold(true)
-	discoveredProjects := internals.DiscoverProjects()
+	discoveredProjects := projects.DiscoverProjects()
 	for _, discoveredProject := range discoveredProjects {
 		rows = append(rows, table.Row{discoveredProject.Name, discoveredProject.Modified, discoveredProject.DirSize})
 	}
@@ -86,7 +87,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case "enter":
 			project := m.table.SelectedRow()[0]
-			return m, internals.RunCommand(project, "ghostty", "-e", "hx", internals.RootDir+"/"+project)
+			return m, internals.LaunchWorkspace(project)
 		case "j":
 			m.output.HalfPageDown()
 			return m, nil
@@ -115,7 +116,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		content += fmt.Sprintf("Projet %s ouvert dans votre IDE préféré !\n", msg.ProjectName)
 		m.output.SetContent(content)
 		return m, nil
-
+	case internals.CmdErrorMsg:
+		content := m.output.GetContent()
+		content += fmt.Sprintln(msg.Error.Error())
+		m.output.SetContent(content)
+		return m, nil
 	}
 	var cmd tea.Cmd
 	m.table, cmd = m.table.Update(msg)

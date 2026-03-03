@@ -1,34 +1,35 @@
 package internals
 
 import (
+	"fmt"
 	"os/exec"
+
+	"hugom/forge/internals/projects"
 
 	tea "charm.land/bubbletea/v2"
 )
 
 type CommandSuccessMsg struct {
-	output any
-
+	ProjectName string
 }
 
 type CmdErrorMsg struct {
-	error error
+	Error error
 }
 
-func LauchWorkspace(projectPath string) tea.Msg {
-	msg := RunCommand("ghossty", "-e", projectPath)
-	msg.output = ""
-	return msg
+func LaunchWorkspace(projectName string) tea.Cmd {
+	return RunCommand(projectName, "wt.exe", "-M", "-p", "Ubuntu", "--title", projectName, "wsl", "bash", "-l", "-c", fmt.Sprintf("hx %s/%s ", projects.RootDir, projectName))
 }
 
-func RunCommand(command string, args ...string) tea.Cmd {
+func RunCommand(projectName string, command string, args ...string) tea.Cmd {
 	return func() tea.Msg {
 		cmd := exec.Command(command, args...)
 		err := cmd.Start()
 		if err != nil {
 			return CmdErrorMsg{err}
 		}
-
-		return CommandSuccessMsg{}
+		return CommandSuccessMsg{
+			ProjectName: projectName,
+		}
 	}
 }

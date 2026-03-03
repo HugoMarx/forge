@@ -1,4 +1,4 @@
-package internals
+package projects
 
 import (
 	"fmt"
@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	RootDir string = "/home/hugo/Projects"
+	RootDir string = "/home/hugom/Projects"
 )
 
 type Project struct {
@@ -40,7 +40,7 @@ func DiscoverProjects() []Project {
 		discoveredProjects = append(discoveredProjects, Project{
 			entry.Name(),
 			entryInfo.ModTime().Format(time.DateOnly),
-			"n/a",// dirSize,
+			"n/a", // dirSize,
 		})
 	}
 	return discoveredProjects
