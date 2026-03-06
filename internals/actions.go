@@ -9,8 +9,8 @@ import (
 	tea "charm.land/bubbletea/v2"
 )
 
-type CommandSuccessMsg struct {
-	ProjectName string
+type CmdSuccessMsg struct {
+	Output string
 }
 
 type CmdErrorMsg struct {
@@ -18,18 +18,12 @@ type CmdErrorMsg struct {
 }
 
 func LaunchWorkspace(projectName string) tea.Cmd {
-	return RunCommand(projectName, "wt.exe", "-M", "-p", "Ubuntu", "--title", projectName, "wsl", "bash", "-l", "-c", fmt.Sprintf("hx %s/%s ", projects.RootDir, projectName))
-}
-
-func RunCommand(projectName string, command string, args ...string) tea.Cmd {
 	return func() tea.Msg {
-		cmd := exec.Command(command, args...)
+		cmd := exec.Command("wt.exe", "-M", "-p", "Ubuntu", "--title", projectName, "wsl", "bash", "-l", "-c", fmt.Sprintf("hx %s/%s ", projects.RootDir, projectName))
 		err := cmd.Start()
 		if err != nil {
-			return CmdErrorMsg{err}
+			return CmdErrorMsg{Error: err}
 		}
-		return CommandSuccessMsg{
-			ProjectName: projectName,
-		}
+		return CmdSuccessMsg{Output: fmt.Sprintf("Projet %s ouvert dans votre IDE préféré !\n", projectName)}
 	}
 }

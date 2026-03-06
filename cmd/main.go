@@ -13,13 +13,13 @@ import (
 	"hugom/forge/internals/projects"
 )
 
-var baseStyle = lipgloss.NewStyle().
-	BorderStyle(lipgloss.NormalBorder()).
-	BorderForeground(lipgloss.Color("240"))
+type rootModel struct {
+	width  int
+	height int
 
-type model struct {
-	table  table.Model
-	output viewport.Model
+	projectsTable table.Model
+	output        viewport.Model
+	monitoring    viewport.Model
 }
 
 func main() {
@@ -30,7 +30,7 @@ func main() {
 	}
 }
 
-func initialModel() model {
+func initialModel() rootModel {
 	columns := []table.Column{
 		{Title: "Projet", Width: 60},
 		{Title: "Modified", Width: 10},
@@ -39,45 +39,43 @@ func initialModel() model {
 
 	rows := []table.Row{}
 
-	s := table.DefaultStyles()
-	s.Header = s.Header.
+	tableStyle := table.DefaultStyles()
+	tableStyle.Header = tableStyle.Header.
 		BorderStyle(lipgloss.NormalBorder()).
 		BorderForeground(lipgloss.Color("240")).
 		BorderBottom(true).
 		Bold(false)
-	s.Selected = s.Selected.
+	tableStyle.Selected = tableStyle.Selected.
 		Foreground(lipgloss.Color("229")).
-		Background(lipgloss.Color("57")). //#ff4d43 Forge Red
+		Background(lipgloss.Color("#ff4d43")). //#ff4d43 Forge Red
 		Bold(true)
 	discoveredProjects := projects.DiscoverProjects()
 	for _, discoveredProject := range discoveredProjects {
 		rows = append(rows, table.Row{discoveredProject.Name, discoveredProject.Modified, discoveredProject.DirSize})
 	}
 
-	t := table.New(
+	tableModel := table.New(
 		table.WithColumns(columns),
 		table.WithRows(rows),
 		table.WithFocused(true),
-		table.WithHeight(25),
 	)
 
-	v := viewport.New(
-		viewport.WithHeight(20),
-	)
+	outputModel := viewport.New()
+	monitoringModel := viewport.New()
 
-	startContent, _ := os.ReadFile("assets/forge.txt")
-	v.SetContent(" Welcome to" + fmt.Sprintf("\x1b[31m%s\x1b[0m\n", string(startContent)))
+	initialContent, _ := os.ReadFile("assets/forge.txt")
+	outputModel.SetContent(" Welcome to" + fmt.Sprintf("\x1b[31m%s\x1b[0m\n", string(initialContent)))
 
-	t.SetStyles(s)
+	tableModel.SetStyles(tableStyle)
 
-	return model{t, v}
+	return rootModel{0, 0, tableModel, outputModel, monitoringModel}
 }
 
-func (m model) Init() tea.Cmd {
+func (m rootModel) Init() tea.Cmd {
 	return nil
 }
 
-func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:
 
@@ -86,7 +84,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 
 		case "enter":
-			project := m.table.SelectedRow()[0]
+			project := m.projectsTable.SelectedRow()[0]
 			return m, internals.LaunchWorkspace(project)
 		case "j":
 			m.output.HalfPageDown()
@@ -97,23 +95,29 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case tea.WindowSizeMsg:
-		totalWidth := msg.Width - 7 // Marge pour la scrollbar
+		m.width = msg.Width
+		m.height = msg.Height
 
+		leftWidth := m.width / 2
+		rightWidth := m.width - leftWidth
+
+		topHeight := m.height / 2
+		bottomHeight := m.height - topHeight
 		columns := []table.Column{
-			{Title: "Projet", Width: int(float64(totalWidth) * 0.8)},
-			{Title: "Modified", Width: int(float64(totalWidth) * 0.1)},
-			{Title: "Size", Width: int(float64(totalWidth) * 0.1)},
+			{Title: "Projet", Width: int(float64(m.width/2) * 0.75)},
+			{Title: "Modified", Width: int(float64(m.width/2) * 0.1)},
+			{Title: "Size", Width: int(float64(m.width/2) * 0.1)},
 		}
+		m.projectsTable.SetColumns(columns)
+		m.projectsTable.SetWidth(leftWidth)
+		m.projectsTable.SetHeight(topHeight)
+		m.output.SetWidth(leftWidth)
+		m.output.SetHeight(bottomHeight - 5)
+		m.monitoring.SetHeight(m.height - 3)
+		m.monitoring.SetWidth(rightWidth - 10)
 
-		m.table.SetColumns(columns)
-		m.table.SetWidth(totalWidth)
-		m.table.SetHeight(msg.Height / 2)
-		m.output.SetWidth(msg.Width - 2)
-		m.output.SetHeight(msg.Height / 3)
-
-	case internals.CommandSuccessMsg:
-		content := m.output.GetContent()
-		content += fmt.Sprintf("Projet %s ouvert dans votre IDE préféré !\n", msg.ProjectName)
+	case internals.CmdSuccessMsg:
+		content := msg.Output
 		m.output.SetContent(content)
 		return m, nil
 	case internals.CmdErrorMsg:
@@ -123,25 +127,19 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	var cmd tea.Cmd
-	m.table, cmd = m.table.Update(msg)
+	m.projectsTable, cmd = m.projectsTable.Update(msg)
 	return m, cmd
 }
 
-func (m model) View() tea.View {
-	rows := m.table.Rows()
-	renderedRows := make([]table.Row, len(rows))
-	for i, row := range rows {
-		firstCell := row[0]
-		if i == m.table.Cursor() {
-			firstCell = "-> " + firstCell
-		}
-		renderedRows[i] = table.Row{firstCell, row[1], row[2]}
-	}
-
-	m.table.SetRows(renderedRows)
-
-	tableRender := baseStyle.Render(m.table.View())
+func (m rootModel) View() tea.View {
+	baseStyle := lipgloss.NewStyle().
+		BorderStyle(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("240"))
+	tableRender := baseStyle.Render(m.projectsTable.View())
 	outputRender := baseStyle.Render(m.output.View())
+	monitoringRender := baseStyle.Render(m.monitoring.View())
 
-	return tea.NewView(lipgloss.JoinVertical(lipgloss.Top, tableRender, outputRender))
+	leftComposedViewport := lipgloss.JoinVertical(lipgloss.Left, tableRender, outputRender)
+	return tea.NewView(
+		lipgloss.JoinHorizontal(lipgloss.Center, leftComposedViewport, monitoringRender))
 }
