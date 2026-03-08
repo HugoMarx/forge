@@ -1,9 +1,13 @@
 package internals
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"os/exec"
+	"path/filepath"
 
+	"hugom/forge/internals/docker"
 	"hugom/forge/internals/projects"
 
 	tea "charm.land/bubbletea/v2"
@@ -15,6 +19,7 @@ type CmdSuccessMsg struct {
 
 type CmdErrorMsg struct {
 	Error error
+	Debug []string
 }
 
 func LaunchWorkspace(projectName string) tea.Cmd {
@@ -25,5 +30,36 @@ func LaunchWorkspace(projectName string) tea.Cmd {
 			return CmdErrorMsg{Error: err}
 		}
 		return CmdSuccessMsg{Output: fmt.Sprintf("Projet %s ouvert dans votre IDE préféré !\n", projectName)}
+	}
+}
+
+func DockerComposeInspect(projectName string, format string) tea.Cmd {
+	return func() tea.Msg {
+		if format == "" {
+			format = "{{json .}}"
+		}
+		cmd := exec.Command("docker", "compose", "ps", "-a", fmt.Sprint("--format=", format))
+		cmd.Dir = filepath.Join(projects.RootDir, projectName)
+		debugDir := fmt.Sprint("Running in dir:", cmd.Dir)
+		debugCommand := fmt.Sprint("Command:", cmd.Args)
+		output, err := cmd.CombinedOutput()
+		if err != nil {
+			return CmdErrorMsg{Error: err, Debug: []string{debugDir, debugCommand}}
+		}
+		lines := bytes.Split(output, []byte("\n"))
+		var containers []docker.Container
+		for _, line := range lines {
+			line = bytes.TrimSpace(line)
+			if len(line) == 0 {
+				continue
+			}
+			var c docker.Container
+			if err := json.Unmarshal(line, &c); err != nil {
+				return CmdErrorMsg{err, nil}
+			}
+			containers = append(containers, c)
+		}
+
+		return docker.ContainerMsg{Project: projectName, Containers: containers}
 	}
 }

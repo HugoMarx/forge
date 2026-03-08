@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"charm.land/bubbles/v2/table"
 	"charm.land/bubbles/v2/viewport"
@@ -10,6 +11,7 @@ import (
 	"charm.land/lipgloss/v2"
 
 	"hugom/forge/internals"
+	"hugom/forge/internals/docker"
 	"hugom/forge/internals/projects"
 )
 
@@ -76,6 +78,8 @@ func (m rootModel) Init() tea.Cmd {
 }
 
 func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	project := m.projectsTable.SelectedRow()[0]
+
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:
 
@@ -84,8 +88,9 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 
 		case "enter":
-			project := m.projectsTable.SelectedRow()[0]
 			return m, internals.LaunchWorkspace(project)
+		case "s":
+			return m, internals.DockerComposeInspect(project, "")
 		case "j":
 			m.output.HalfPageDown()
 			return m, nil
@@ -119,11 +124,26 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case internals.CmdSuccessMsg:
 		content := msg.Output
 		m.output.SetContent(content)
+		m.output.GotoBottom()
+		return m, nil
+	case docker.ContainerMsg:
+		var builder strings.Builder
+		builder.WriteString("Docker data pour " + msg.Project + "\n")
+		for _, container := range msg.Containers {
+			builder.WriteString("\t" + container.Name + "\n")
+			builder.WriteString("\t" + container.Status + "\n")
+			builder.WriteString("\t" + container.Service + "\n")
+			builder.WriteString("\t" + container.Ports + "\n")
+			builder.WriteString("\t" + container.State + "\n\n")
+		}
+
+		m.monitoring.SetContent(builder.String())
 		return m, nil
 	case internals.CmdErrorMsg:
 		content := m.output.GetContent()
 		content += fmt.Sprintln(msg.Error.Error())
-		m.output.SetContent(content)
+		m.output.SetContent(content + "\n" + strings.Join(msg.Debug, "\n") + "\n\n\n")
+		m.output.GotoBottom()
 		return m, nil
 	}
 	var cmd tea.Cmd
