@@ -5,6 +5,7 @@ import (
 	"os"
 	"strings"
 
+	"charm.land/bubbles/v2/help"
 	"charm.land/bubbles/v2/table"
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
@@ -12,6 +13,7 @@ import (
 
 	"hugom/forge/internals"
 	"hugom/forge/internals/docker"
+	"hugom/forge/internals/helper"
 	"hugom/forge/internals/projects"
 )
 
@@ -22,6 +24,7 @@ type rootModel struct {
 	projectsTable table.Model
 	output        viewport.Model
 	monitoring    viewport.Model
+	help help.Model
 }
 
 func main() {
@@ -64,13 +67,14 @@ func initialModel() rootModel {
 
 	outputModel := viewport.New()
 	monitoringModel := viewport.New()
+	helpModel := help.New()
 
 	initialContent, _ := os.ReadFile("assets/forge.txt")
 	outputModel.SetContent(" Welcome to" + fmt.Sprintf("\x1b[31m%s\x1b[0m\n", string(initialContent)))
 
 	tableModel.SetStyles(tableStyle)
 
-	return rootModel{0, 0, tableModel, outputModel, monitoringModel}
+	return rootModel{0, 0, tableModel, outputModel, monitoringModel, helpModel}
 }
 
 func (m rootModel) Init() tea.Cmd {
@@ -80,6 +84,7 @@ func (m rootModel) Init() tea.Cmd {
 func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	project := m.projectsTable.SelectedRow()[0]
 
+	var stringBuilder strings.Builder
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:
 
@@ -89,6 +94,8 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case "enter":
 			return m, internals.LaunchWorkspace(project)
+		case "r":
+			return m, internals.DockerComposeUp(project)
 		case "s":
 			return m, internals.DockerComposeInspect(project, "")
 		case "j":
@@ -97,20 +104,23 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "k":
 			m.output.HalfPageUp()
 			return m, nil
+		case "?":
+		m.output.SetContent(m.help.FullHelpView(helper.Keys.FullHelp()))
+			return m, nil
 		}
 
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
 
-		leftWidth := m.width / 2
+		leftWidth := (m.width / 2) + 5
 		rightWidth := m.width - leftWidth
 
-		topHeight := m.height / 2
+		topHeight := (m.height / 2)
 		bottomHeight := m.height - topHeight
 		columns := []table.Column{
 			{Title: "Projet", Width: int(float64(m.width/2) * 0.75)},
-			{Title: "Modified", Width: int(float64(m.width/2) * 0.1)},
+			{Title: "Modified", Width: int(float64(m.width/2) * 0.15)},
 			{Title: "Size", Width: int(float64(m.width/2) * 0.1)},
 		}
 		m.projectsTable.SetColumns(columns)
@@ -126,19 +136,24 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.output.SetContent(content)
 		m.output.GotoBottom()
 		return m, nil
-	case docker.ContainerMsg:
-		var builder strings.Builder
-		builder.WriteString("Docker data pour " + msg.Project + "\n")
+	case docker.ContainerInspectMsg:
+		stringBuilder.Reset()
+		stringBuilder.WriteString("Docker data pour " + msg.Project + "\n")
 		for _, container := range msg.Containers {
-			builder.WriteString("\t" + container.Name + "\n")
-			builder.WriteString("\t" + container.Status + "\n")
-			builder.WriteString("\t" + container.Service + "\n")
-			builder.WriteString("\t" + container.Ports + "\n")
-			builder.WriteString("\t" + container.State + "\n\n")
+			stringBuilder.WriteString("\t" + container.Name + "\n")
+			stringBuilder.WriteString("\t" + container.Status + "\n")
+			stringBuilder.WriteString("\t" + container.Service + "\n")
+			stringBuilder.WriteString("\t" + container.Ports + "\n")
+			stringBuilder.WriteString("\t" + container.State + "\n\n")
 		}
 
-		m.monitoring.SetContent(builder.String())
+		m.monitoring.SetContent(stringBuilder.String())
 		return m, nil
+	case docker.RunContainerMsg:
+		stringBuilder.Reset()
+		stringBuilder.WriteString(string(msg.Output))
+		stringBuilder.WriteString("\n " + msg.Project + " is now running !\n")
+		m.monitoring.SetContent(stringBuilder.String())
 	case internals.CmdErrorMsg:
 		content := m.output.GetContent()
 		content += fmt.Sprintln(msg.Error.Error())
@@ -155,11 +170,14 @@ func (m rootModel) View() tea.View {
 	baseStyle := lipgloss.NewStyle().
 		BorderStyle(lipgloss.RoundedBorder()).
 		BorderForeground(lipgloss.Color("240"))
+
+	helpStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("201"))
 	tableRender := baseStyle.Render(m.projectsTable.View())
 	outputRender := baseStyle.Render(m.output.View())
 	monitoringRender := baseStyle.Render(m.monitoring.View())
+	helpRender := helpStyle.Render(m.help.ShortHelpView(helper.Keys.ShortHelp()))
 
 	leftComposedViewport := lipgloss.JoinVertical(lipgloss.Left, tableRender, outputRender)
 	return tea.NewView(
-		lipgloss.JoinHorizontal(lipgloss.Center, leftComposedViewport, monitoringRender))
-}
+		lipgloss.JoinHorizontal(lipgloss.Center, leftComposedViewport, monitoringRender) + "\n" + helpRender)
+  }

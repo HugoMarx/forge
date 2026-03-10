@@ -8,7 +8,14 @@ type Container struct {
 	Ports   string `json:"Ports"`
 }
 
-type ContainerMsg struct {
+type ContainerInspectMsg struct {
 	Project    string
 	Containers []Container
+}
+
+type RunContainerMsg struct {
+	Project string
+	Error error
+	IsRunning bool
+	Output []byte
 }

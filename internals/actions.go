@@ -60,6 +60,18 @@ func DockerComposeInspect(projectName string, format string) tea.Cmd {
 			containers = append(containers, c)
 		}
 
-		return docker.ContainerMsg{Project: projectName, Containers: containers}
+		return docker.ContainerInspectMsg{Project: projectName, Containers: containers}
+	}
+}
+
+func DockerComposeUp(projectName string, options ...[]string) tea.Cmd {
+	return func() tea.Msg {
+		cmd := exec.Command("docker", "compose", "up", "-d")
+		cmd.Dir = filepath.Join(projects.RootDir, projectName)
+		output, err := cmd.CombinedOutput()
+		if err != nil {
+			return docker.RunContainerMsg{Project: projectName, Error: err, IsRunning: false, Output: []byte{}}
+		}
+		return docker.RunContainerMsg{Project: projectName, Error: nil, IsRunning: false, Output: output}
 	}
 }
