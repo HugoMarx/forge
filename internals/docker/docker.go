@@ -10,12 +10,15 @@ type Container struct {
 
 type ContainerInspectMsg struct {
 	Project    string
+	Error      error
 	Containers []Container
+	Output     []byte
 }
 
-type RunContainerMsg struct {
-	Project string
-	Error error
+type ContainerStateMsg struct {
+	Project   string
+	Error     error
 	IsRunning bool
-	Output []byte
+	Output    []byte
+	Options   map[string]any
 }

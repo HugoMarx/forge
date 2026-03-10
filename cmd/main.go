@@ -24,7 +24,7 @@ type rootModel struct {
 	projectsTable table.Model
 	output        viewport.Model
 	monitoring    viewport.Model
-	help help.Model
+	help          help.Model
 }
 
 func main() {
@@ -94,8 +94,12 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case "enter":
 			return m, internals.LaunchWorkspace(project)
-		case "r":
-			return m, internals.DockerComposeUp(project)
+		case "u":
+			return m, internals.DockerComposeUp(project, false)
+		case "U":
+			return m, internals.DockerComposeUp(project, true)
+		case "d":
+			return m, internals.DockerComposeDown(project)
 		case "s":
 			return m, internals.DockerComposeInspect(project, "")
 		case "j":
@@ -105,7 +109,7 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.output.HalfPageUp()
 			return m, nil
 		case "?":
-		m.output.SetContent(m.help.FullHelpView(helper.Keys.FullHelp()))
+			m.output.SetContent(m.help.FullHelpView(helper.Keys.FullHelp()))
 			return m, nil
 		}
 
@@ -149,11 +153,26 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		m.monitoring.SetContent(stringBuilder.String())
 		return m, nil
-	case docker.RunContainerMsg:
+	case docker.ContainerStateMsg:
+		var cmd tea.Cmd
 		stringBuilder.Reset()
-		stringBuilder.WriteString(string(msg.Output))
-		stringBuilder.WriteString("\n " + msg.Project + " is now running !\n")
+		if msg.IsRunning {
+			stringBuilder.WriteString(string(msg.Output))
+			stringBuilder.WriteString("\n " + msg.Project + " is now running in Docker ! 🐋\n")
+
+			if value, ok := msg.Options["launch"]; ok {
+				if withLaunch, ok := value.(bool); ok && withLaunch {
+					cmd = internals.LaunchWorkspace(msg.Project)
+				}
+			}
+
+		} else {
+			stringBuilder.WriteString("\n " + msg.Project + " shutting down ! 🐋\n")
+			stringBuilder.WriteString(string(msg.Output))
+		}
+
 		m.monitoring.SetContent(stringBuilder.String())
+		return m, cmd
 	case internals.CmdErrorMsg:
 		content := m.output.GetContent()
 		content += fmt.Sprintln(msg.Error.Error())
@@ -180,4 +199,4 @@ func (m rootModel) View() tea.View {
 	leftComposedViewport := lipgloss.JoinVertical(lipgloss.Left, tableRender, outputRender)
 	return tea.NewView(
 		lipgloss.JoinHorizontal(lipgloss.Center, leftComposedViewport, monitoringRender) + "\n" + helpRender)
-  }
+}

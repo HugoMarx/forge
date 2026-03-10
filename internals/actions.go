@@ -64,14 +64,30 @@ func DockerComposeInspect(projectName string, format string) tea.Cmd {
 	}
 }
 
-func DockerComposeUp(projectName string, options ...[]string) tea.Cmd {
+func DockerComposeUp(projectName string, launch bool) tea.Cmd {
+	DockerComposeDown(projectName) // On démonte systématiquement le container avant de le lancer.
+
 	return func() tea.Msg {
 		cmd := exec.Command("docker", "compose", "up", "-d")
 		cmd.Dir = filepath.Join(projects.RootDir, projectName)
+
 		output, err := cmd.CombinedOutput()
 		if err != nil {
-			return docker.RunContainerMsg{Project: projectName, Error: err, IsRunning: false, Output: []byte{}}
+			return CmdErrorMsg{Error: err, Debug: []string{}}
 		}
-		return docker.RunContainerMsg{Project: projectName, Error: nil, IsRunning: false, Output: output}
+
+		return docker.ContainerStateMsg{Project: projectName, Error: nil, IsRunning: true, Output: output, Options: map[string]any{"launch": launch}}
+	}
+}
+
+func DockerComposeDown(projectName string, options ...[]string) tea.Cmd {
+	return func() tea.Msg {
+		cmd := exec.Command("docker", "compose", "down")
+		cmd.Dir = filepath.Join(projects.RootDir, projectName)
+		output, err := cmd.CombinedOutput()
+		if err != nil {
+			return CmdErrorMsg{Error: err, Debug: []string{}}
+		}
+		return docker.ContainerStateMsg{Project: projectName, Error: nil, IsRunning: false, Output: output}
 	}
 }
