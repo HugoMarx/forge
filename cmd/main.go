@@ -5,26 +5,26 @@ import (
 	"os"
 	"strings"
 
+	c "hugom/forge/components"
+	"hugom/forge/components/forgetable"
+	"hugom/forge/components/helpbar"
+	"hugom/forge/docker"
+	"hugom/forge/forgemsg"
+	"hugom/forge/helper"
+
 	"charm.land/bubbles/v2/help"
-	"charm.land/bubbles/v2/table"
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
-
-	"hugom/forge/internals"
-	"hugom/forge/internals/docker"
-	"hugom/forge/internals/helper"
-	"hugom/forge/internals/projects"
 )
 
 type rootModel struct {
-	width  int
-	height int
-
-	projectsTable table.Model
-	output        viewport.Model
-	monitoring    viewport.Model
-	help          help.Model
+	projectsTable forgetable.ForgeTable
+	commandOutput viewport.Model
+	topWindow     viewport.Model
+	centerWindow  viewport.Model
+	bottomWindow  viewport.Model
+	helpBar       help.Model
 }
 
 func main() {
@@ -35,46 +35,23 @@ func main() {
 	}
 }
 
+var stringBuilder strings.Builder
+
 func initialModel() rootModel {
-	columns := []table.Column{
-		{Title: "Projet", Width: 60},
-		{Title: "Modified", Width: 10},
-		{Title: "Size", Width: 20},
+	commandOutput := viewport.New()
+	forgeTitle, _ := os.ReadFile("assets/forge.txt")
+	// TODO Utiliser les color helpers lipgloss
+	startupMessage := " Welcome to" + fmt.Sprintf("\x1b[31m%s\x1b[0m\n", forgeTitle)
+	commandOutput.SetContent(startupMessage)
+
+	return rootModel{
+		projectsTable: forgetable.ProjectsTable,
+		commandOutput: commandOutput,
+		topWindow:     viewport.New(),
+		centerWindow:  viewport.New(),
+		bottomWindow:  viewport.New(),
+		helpBar:       help.New(),
 	}
-
-	rows := []table.Row{}
-
-	tableStyle := table.DefaultStyles()
-	tableStyle.Header = tableStyle.Header.
-		BorderStyle(lipgloss.NormalBorder()).
-		BorderForeground(lipgloss.Color("240")).
-		BorderBottom(true).
-		Bold(false)
-	tableStyle.Selected = tableStyle.Selected.
-		Foreground(lipgloss.Color("229")).
-		Background(lipgloss.Color("#ff4d43")). //#ff4d43 Forge Red
-		Bold(true)
-	discoveredProjects := projects.DiscoverProjects()
-	for _, discoveredProject := range discoveredProjects {
-		rows = append(rows, table.Row{discoveredProject.Name, discoveredProject.Modified, discoveredProject.DirSize})
-	}
-
-	tableModel := table.New(
-		table.WithColumns(columns),
-		table.WithRows(rows),
-		table.WithFocused(true),
-	)
-
-	outputModel := viewport.New()
-	monitoringModel := viewport.New()
-	helpModel := help.New()
-
-	initialContent, _ := os.ReadFile("assets/forge.txt")
-	outputModel.SetContent(" Welcome to" + fmt.Sprintf("\x1b[31m%s\x1b[0m\n", string(initialContent)))
-
-	tableModel.SetStyles(tableStyle)
-
-	return rootModel{0, 0, tableModel, outputModel, monitoringModel, helpModel}
 }
 
 func (m rootModel) Init() tea.Cmd {
@@ -82,9 +59,8 @@ func (m rootModel) Init() tea.Cmd {
 }
 
 func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	project := m.projectsTable.SelectedRow()[0]
+	selectedProject := m.projectsTable.Table.SelectedRow()[0]
 
-	var stringBuilder strings.Builder
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:
 
@@ -93,110 +69,103 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 
 		case "enter":
-			return m, internals.LaunchWorkspace(project)
+			return m, helper.LaunchWorkspace(selectedProject)
 		case "u":
-			return m, internals.DockerComposeUp(project, false)
+			return m, docker.DockerComposeUp(selectedProject, false)
 		case "U":
-			return m, internals.DockerComposeUp(project, true)
+			return m, docker.DockerComposeUp(selectedProject, true)
 		case "d":
-			return m, internals.DockerComposeDown(project)
+			return m, docker.DockerComposeDown(selectedProject)
 		case "s":
-			return m, internals.DockerComposeInspect(project, "")
+			return m, docker.DockerComposeInspect(selectedProject, "")
 		case "j":
-			m.output.HalfPageDown()
+			m.commandOutput.HalfPageDown()
 			return m, nil
 		case "k":
-			m.output.HalfPageUp()
+			m.commandOutput.HalfPageUp()
 			return m, nil
 		case "?":
-			m.output.SetContent(m.help.FullHelpView(helper.Keys.FullHelp()))
+			m.commandOutput.SetContent(m.helpBar.FullHelpView(helpbar.Keys.FullHelp()))
 			return m, nil
 		}
 
 	case tea.WindowSizeMsg:
-		m.width = msg.Width
-		m.height = msg.Height
+		leftPanelWidth := (msg.Width / 2) + 5
+		rightPanelWidth := (msg.Width - leftPanelWidth) - 5
 
-		leftWidth := (m.width / 2) + 5
-		rightWidth := m.width - leftWidth
+		leftPanelTopWinHeight := msg.Height / 2
+		leftPanelBottomWinHeight := (msg.Height - leftPanelTopWinHeight) - 5
+		rightPanelWinHeight := (msg.Height / 3) - 3
 
-		topHeight := (m.height / 2)
-		bottomHeight := m.height - topHeight
-		columns := []table.Column{
-			{Title: "Projet", Width: int(float64(m.width/2) * 0.75)},
-			{Title: "Modified", Width: int(float64(m.width/2) * 0.15)},
-			{Title: "Size", Width: int(float64(m.width/2) * 0.1)},
+		m.projectsTable.ResizeColumns(msg.Width)
+		m.projectsTable.Table.SetWidth(leftPanelWidth)
+		m.projectsTable.Table.SetHeight(leftPanelTopWinHeight)
+
+		m.commandOutput.SetWidth(leftPanelWidth)
+		m.commandOutput.SetHeight(leftPanelBottomWinHeight)
+
+		for _, rigthPanelWindow := range []*viewport.Model{&m.topWindow, &m.centerWindow, &m.bottomWindow} {
+			rigthPanelWindow.SetHeight(rightPanelWinHeight)
+			rigthPanelWindow.SetWidth(rightPanelWidth)
 		}
-		m.projectsTable.SetColumns(columns)
-		m.projectsTable.SetWidth(leftWidth)
-		m.projectsTable.SetHeight(topHeight)
-		m.output.SetWidth(leftWidth)
-		m.output.SetHeight(bottomHeight - 5)
-		m.monitoring.SetHeight(m.height - 3)
-		m.monitoring.SetWidth(rightWidth - 10)
 
-	case internals.CmdSuccessMsg:
-		content := msg.Output
-		m.output.SetContent(content)
-		m.output.GotoBottom()
+	case forgemsg.CmdSuccessMsg:
+		outputContent := msg.Output
+		m.commandOutput.SetContent(outputContent)
+		m.commandOutput.GotoBottom()
 		return m, nil
 	case docker.ContainerInspectMsg:
 		stringBuilder.Reset()
-		stringBuilder.WriteString("Docker data pour " + msg.Project + "\n")
+		fmt.Fprintf(&stringBuilder, "Docker data pour %s\n", msg.Project)
 		for _, container := range msg.Containers {
-			stringBuilder.WriteString("\t" + container.Name + "\n")
-			stringBuilder.WriteString("\t" + container.Status + "\n")
-			stringBuilder.WriteString("\t" + container.Service + "\n")
-			stringBuilder.WriteString("\t" + container.Ports + "\n")
-			stringBuilder.WriteString("\t" + container.State + "\n\n")
+			fmt.Fprintf(&stringBuilder, "\t%s\n\t%s\n\t%s\n\t%s\n\t%s\n\n", container.Name, container.Status, container.Service, container.Ports, container.State)
 		}
 
-		m.monitoring.SetContent(stringBuilder.String())
+		m.topWindow.SetContent(stringBuilder.String())
 		return m, nil
 	case docker.ContainerStateMsg:
 		var cmd tea.Cmd
 		stringBuilder.Reset()
 		if msg.IsRunning {
-			stringBuilder.WriteString(string(msg.Output))
-			stringBuilder.WriteString("\n " + msg.Project + " is now running in Docker ! 🐋\n")
+			fmt.Fprint(&stringBuilder, string(msg.Output))
+			fmt.Fprintf(&stringBuilder, "\n%s is now running in Docker ! 🐋\n", msg.Project)
 
 			if value, ok := msg.Options["launch"]; ok {
 				if withLaunch, ok := value.(bool); ok && withLaunch {
-					cmd = internals.LaunchWorkspace(msg.Project)
+					cmd = helper.LaunchWorkspace(msg.Project)
 				}
 			}
-
-		} else {
-			stringBuilder.WriteString("\n " + msg.Project + " shutting down ! 🐋\n")
-			stringBuilder.WriteString(string(msg.Output))
 		}
 
-		m.monitoring.SetContent(stringBuilder.String())
+		if !msg.IsRunning {
+			fmt.Fprintf(&stringBuilder, "\n%s shutting down ! 🐋\n", msg.Project)
+			fmt.Fprint(&stringBuilder, string(msg.Output))
+		}
+
+		m.topWindow.SetContent(stringBuilder.String())
 		return m, cmd
-	case internals.CmdErrorMsg:
-		content := m.output.GetContent()
-		content += fmt.Sprintln(msg.Error.Error())
-		m.output.SetContent(content + "\n" + strings.Join(msg.Debug, "\n") + "\n\n\n")
-		m.output.GotoBottom()
+	case forgemsg.CmdErrorMsg:
+		outputContent := m.commandOutput.GetContent()
+		outputContent += fmt.Sprintln(msg.Error.Error())
+		m.commandOutput.SetContent(outputContent + "\n" + strings.Join(msg.Debug, "\n") + "\n\n\n")
+		m.commandOutput.GotoBottom()
 		return m, nil
 	}
 	var cmd tea.Cmd
-	m.projectsTable, cmd = m.projectsTable.Update(msg)
+	m.projectsTable.Table, cmd = m.projectsTable.Table.Update(msg)
 	return m, cmd
 }
 
 func (m rootModel) View() tea.View {
-	baseStyle := lipgloss.NewStyle().
-		BorderStyle(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("240"))
-
-	helpStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("201"))
-	tableRender := baseStyle.Render(m.projectsTable.View())
-	outputRender := baseStyle.Render(m.output.View())
-	monitoringRender := baseStyle.Render(m.monitoring.View())
-	helpRender := helpStyle.Render(m.help.ShortHelpView(helper.Keys.ShortHelp()))
+	tableRender := m.projectsTable.Render()
+	outputRender := c.BaseStyle.Render(m.commandOutput.View())
+	topMonitoringRender := c.BaseStyle.Render(m.topWindow.View())
+	centerMonitoringRender := c.BaseStyle.Render(m.centerWindow.View())
+	bottomMonitoringRender := c.BaseStyle.Render(m.bottomWindow.View())
+	helpRender := helpbar.GetStyle().Render(m.helpBar.ShortHelpView(helpbar.Keys.ShortHelp()))
 
 	leftComposedViewport := lipgloss.JoinVertical(lipgloss.Left, tableRender, outputRender)
+	rightComposedViewport := lipgloss.JoinVertical(lipgloss.Left, topMonitoringRender, centerMonitoringRender, bottomMonitoringRender)
 	return tea.NewView(
-		lipgloss.JoinHorizontal(lipgloss.Center, leftComposedViewport, monitoringRender) + "\n" + helpRender)
+		lipgloss.JoinHorizontal(lipgloss.Top, leftComposedViewport, rightComposedViewport) + "\n" + helpRender)
 }

@@ -1,4 +1,4 @@
-package internals
+package docker
 
 import (
 	"bytes"
@@ -7,31 +7,12 @@ import (
 	"os/exec"
 	"path/filepath"
 
-	"hugom/forge/internals/docker"
-	"hugom/forge/internals/projects"
+	"hugom/forge/forgemsg"
+	"hugom/forge/projects"
 
 	tea "charm.land/bubbletea/v2"
 )
 
-type CmdSuccessMsg struct {
-	Output string
-}
-
-type CmdErrorMsg struct {
-	Error error
-	Debug []string
-}
-
-func LaunchWorkspace(projectName string) tea.Cmd {
-	return func() tea.Msg {
-		cmd := exec.Command("wt.exe", "-M", "-p", "Ubuntu", "--title", projectName, "wsl", "bash", "-l", "-c", fmt.Sprintf("hx %s/%s ", projects.RootDir, projectName))
-		err := cmd.Start()
-		if err != nil {
-			return CmdErrorMsg{Error: err}
-		}
-		return CmdSuccessMsg{Output: fmt.Sprintf("Projet %s ouvert dans votre IDE préféré !\n", projectName)}
-	}
-}
 
 func DockerComposeInspect(projectName string, format string) tea.Cmd {
 	return func() tea.Msg {
@@ -44,23 +25,23 @@ func DockerComposeInspect(projectName string, format string) tea.Cmd {
 		debugCommand := fmt.Sprint("Command:", cmd.Args)
 		output, err := cmd.CombinedOutput()
 		if err != nil {
-			return CmdErrorMsg{Error: err, Debug: []string{debugDir, debugCommand}}
+			return forgemsg.CmdErrorMsg{Error: err, Debug: []string{debugDir, debugCommand}}
 		}
 		lines := bytes.Split(output, []byte("\n"))
-		var containers []docker.Container
+		var containers []Container
 		for _, line := range lines {
 			line = bytes.TrimSpace(line)
 			if len(line) == 0 {
 				continue
 			}
-			var c docker.Container
+			var c Container
 			if err := json.Unmarshal(line, &c); err != nil {
-				return CmdErrorMsg{err, nil}
+				return forgemsg.CmdErrorMsg{Error: err, Debug: nil}
 			}
 			containers = append(containers, c)
 		}
 
-		return docker.ContainerInspectMsg{Project: projectName, Containers: containers}
+		return ContainerInspectMsg{Project: projectName, Containers: containers}
 	}
 }
 
@@ -73,10 +54,10 @@ func DockerComposeUp(projectName string, launch bool) tea.Cmd {
 
 		output, err := cmd.CombinedOutput()
 		if err != nil {
-			return CmdErrorMsg{Error: err, Debug: []string{}}
+			return forgemsg.CmdErrorMsg{Error: err, Debug: []string{}}
 		}
 
-		return docker.ContainerStateMsg{Project: projectName, Error: nil, IsRunning: true, Output: output, Options: map[string]any{"launch": launch}}
+		return ContainerStateMsg{Project: projectName, Error: nil, IsRunning: true, Output: output, Options: map[string]any{"launch": launch}}
 	}
 }
 
@@ -86,8 +67,8 @@ func DockerComposeDown(projectName string, options ...[]string) tea.Cmd {
 		cmd.Dir = filepath.Join(projects.RootDir, projectName)
 		output, err := cmd.CombinedOutput()
 		if err != nil {
-			return CmdErrorMsg{Error: err, Debug: []string{}}
+			return forgemsg.CmdErrorMsg{Error: err, Debug: []string{}}
 		}
-		return docker.ContainerStateMsg{Project: projectName, Error: nil, IsRunning: false, Output: output}
+		return ContainerStateMsg{Project: projectName, Error: nil, IsRunning: false, Output: output}
 	}
 }
