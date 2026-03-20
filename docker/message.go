@@ -22,3 +22,7 @@ type ContainerStateMsg struct {
 	Output    []byte
 	Options   map[string]any
 }
+
+type NoDockerFileMsg struct {
+	Message string
+}

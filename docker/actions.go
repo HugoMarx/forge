@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
 
@@ -13,14 +14,19 @@ import (
 	tea "charm.land/bubbletea/v2"
 )
 
-
 func DockerComposeInspect(projectName string, format string) tea.Cmd {
 	return func() tea.Msg {
 		if format == "" {
 			format = "{{json .}}"
 		}
+
+		projectDir := filepath.Join(projects.RootDir, projectName)
+		if !hasDockerComposeFile(projectDir) {
+			return NoDockerFileMsg{fmt.Sprintln("Aucune config Docker détectée dans", projectDir, "!")}
+		}
+
 		cmd := exec.Command("docker", "compose", "ps", "-a", fmt.Sprint("--format=", format))
-		cmd.Dir = filepath.Join(projects.RootDir, projectName)
+		cmd.Dir = projectDir
 		debugDir := fmt.Sprint("Running in dir:", cmd.Dir)
 		debugCommand := fmt.Sprint("Command:", cmd.Args)
 		output, err := cmd.CombinedOutput()
@@ -71,4 +77,9 @@ func DockerComposeDown(projectName string, options ...[]string) tea.Cmd {
 		}
 		return ContainerStateMsg{Project: projectName, Error: nil, IsRunning: false, Output: output}
 	}
+}
+
+func hasDockerComposeFile(dir string) bool {
+	_, err := os.Stat(fmt.Sprintf("%s/docker-compose.yml", dir))
+	return !os.IsNotExist(err)
 }

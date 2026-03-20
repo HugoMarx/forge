@@ -16,6 +16,7 @@ import (
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 )
 
 type rootModel struct {
@@ -60,6 +61,7 @@ func (m rootModel) Init() tea.Cmd {
 
 func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	selectedProject := m.projectsTable.Table.SelectedRow()[0]
+	var cmd tea.Cmd
 
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:
@@ -75,12 +77,16 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "U":
 			return m, docker.DockerComposeUp(selectedProject, true)
 		case "d":
+			stringBuilder.Reset()
+			fmt.Fprintf(&stringBuilder, "%s shutting down ! 🐋\n", selectedProject)
+			m.topWindow.SetContent(stringBuilder.String())
 			return m, docker.DockerComposeDown(selectedProject)
 		case "s":
 			return m, docker.DockerComposeInspect(selectedProject, "")
-		case "j":
-			m.commandOutput.HalfPageDown()
-			return m, nil
+		case "up", "down":
+			m.projectsTable.Table, cmd = m.projectsTable.Table.Update(msg)
+			selected := m.projectsTable.Table.SelectedRow()[0]
+			return m, tea.Batch(docker.DockerComposeInspect(selected, ""), cmd)
 		case "k":
 			m.commandOutput.HalfPageUp()
 			return m, nil
@@ -94,18 +100,21 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		rightPanelWidth := (msg.Width - leftPanelWidth) - 5
 
 		leftPanelTopWinHeight := msg.Height / 2
-		leftPanelBottomWinHeight := (msg.Height - leftPanelTopWinHeight) - 5
-		rightPanelWinHeight := (msg.Height / 3) - 3
+		leftPanelBottomWinHeight := float64(msg.Height-leftPanelTopWinHeight) - (float64(msg.Height) * float64(0.1))
+		rightPanelWinHeight := float64(msg.Height) - (float64(msg.Height) * float64(0.1))
 
 		m.projectsTable.ResizeColumns(msg.Width)
 		m.projectsTable.Table.SetWidth(leftPanelWidth)
 		m.projectsTable.Table.SetHeight(leftPanelTopWinHeight)
 
 		m.commandOutput.SetWidth(leftPanelWidth)
-		m.commandOutput.SetHeight(leftPanelBottomWinHeight)
+		m.commandOutput.SetHeight(int(leftPanelBottomWinHeight))
 
-		for _, rigthPanelWindow := range []*viewport.Model{&m.topWindow, &m.centerWindow, &m.bottomWindow} {
-			rigthPanelWindow.SetHeight(rightPanelWinHeight)
+		for key, rigthPanelWindow := range []*viewport.Model{&m.topWindow, &m.centerWindow, &m.bottomWindow} {
+			rigthPanelWindow.SetHeight(int((rightPanelWinHeight * 0.25)))
+			if key == 0 {
+				rigthPanelWindow.SetHeight(int(rightPanelWinHeight * 0.5))
+			}
 			rigthPanelWindow.SetWidth(rightPanelWidth)
 		}
 
@@ -114,34 +123,43 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.commandOutput.SetContent(outputContent)
 		m.commandOutput.GotoBottom()
 		return m, nil
+	case docker.NoDockerFileMsg:
+		stringBuilder.Reset()
+		fmt.Fprint(&stringBuilder, msg.Message)
+		m.topWindow.SetContent(ansi.Wordwrap(stringBuilder.String(), m.topWindow.Width(), ""))
+		return m, nil
 	case docker.ContainerInspectMsg:
 		stringBuilder.Reset()
-		fmt.Fprintf(&stringBuilder, "Docker data pour %s\n", msg.Project)
-		for _, container := range msg.Containers {
-			fmt.Fprintf(&stringBuilder, "\t%s\n\t%s\n\t%s\n\t%s\n\t%s\n\n", container.Name, container.Status, container.Service, container.Ports, container.State)
+
+		if len(msg.Containers) == 0 {
+			fmt.Fprint(&stringBuilder, "Aucun conteneur monté :\nTapez u pour initialiser l'environnement Docker.")
+		} else {
+			fmt.Fprintf(&stringBuilder, "Docker data pour %s\n", msg.Project)
+			for _, container := range msg.Containers {
+				fmt.Fprintf(&stringBuilder, "\t%s\n\t%s\n\t%s\n\t%s\n\t%s\n\n", container.Name, container.Status, container.Service, container.Ports, container.State)
+			}
+
 		}
 
 		m.topWindow.SetContent(stringBuilder.String())
 		return m, nil
 	case docker.ContainerStateMsg:
 		var cmd tea.Cmd
-		stringBuilder.Reset()
-		if msg.IsRunning {
+		if !msg.IsRunning {
 			fmt.Fprint(&stringBuilder, string(msg.Output))
-			fmt.Fprintf(&stringBuilder, "\n%s is now running in Docker ! 🐋\n", msg.Project)
+		} else {
+			stringBuilder.Reset()
+			if msg.IsRunning {
+				fmt.Fprint(&stringBuilder, string(msg.Output))
+				fmt.Fprintf(&stringBuilder, "%s is now running in Docker ! 🐋\n", msg.Project)
 
-			if value, ok := msg.Options["launch"]; ok {
-				if withLaunch, ok := value.(bool); ok && withLaunch {
-					cmd = helper.LaunchWorkspace(msg.Project)
+				if value, ok := msg.Options["launch"]; ok {
+					if withLaunch, ok := value.(bool); ok && withLaunch {
+						cmd = helper.LaunchWorkspace(msg.Project)
+					}
 				}
 			}
 		}
-
-		if !msg.IsRunning {
-			fmt.Fprintf(&stringBuilder, "\n%s shutting down ! 🐋\n", msg.Project)
-			fmt.Fprint(&stringBuilder, string(msg.Output))
-		}
-
 		m.topWindow.SetContent(stringBuilder.String())
 		return m, cmd
 	case forgemsg.CmdErrorMsg:
@@ -151,7 +169,6 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.commandOutput.GotoBottom()
 		return m, nil
 	}
-	var cmd tea.Cmd
 	m.projectsTable.Table, cmd = m.projectsTable.Table.Update(msg)
 	return m, cmd
 }
