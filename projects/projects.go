@@ -16,6 +16,10 @@ type Project struct {
 	DirSize  string
 }
 
+func (p Project) ToRow() []string {
+	return []string{p.Name, p.Modified, p.DirSize}
+}
+
 func DiscoverProjects() []Project {
 	var discoveredProjects []Project
 	entries, err := os.ReadDir(RootDir)

@@ -1,16 +1,16 @@
 package forgetable
 
 import (
+	// "fmt"
 	"hugom/forge/components"
-	"hugom/forge/projects"
+	// "hugom/forge/helper"
 
 	"charm.land/bubbles/v2/table"
 )
 
-var (
-	DiscoveredProjects []projects.Project = projects.DiscoverProjects()
-	ProjectsTable      ForgeTable       = initTable()
-)
+type Rowable interface {
+	ToRow() []string
+}
 
 type ColConfig struct {
 	Title string
@@ -18,24 +18,45 @@ type ColConfig struct {
 }
 
 type ForgeTable struct {
-	Table table.Model
+	headers []ColConfig
+	Table   table.Model
 }
 
-var tableHeaders = []ColConfig{
-	{Title: "Project", Width: 75},
-	{Title: "Modified", Width: 15},
-	{Title: "Size", Width: 10},
+var MainTable = &ForgeTable{
+	headers: []ColConfig{
+		{Title: "Project", Width: 75},
+		{Title: "Modified", Width: 15},
+		{Title: "Size", Width: 10},
+	},
 }
 
-func initTable() ForgeTable {
+var DockerTable = &ForgeTable{
+	headers: []ColConfig{
+		{Title: "Container", Width: 20},
+		{Title: "Image", Width: 10},
+		{Title: "State", Width: 10},
+		{Title: "Status", Width: 10},
+		{Title: "Port", Width: 10},
+	},
+}
+
+func ToRowable [T Rowable](items []T) []Rowable {
+	entries := make([]Rowable, 0, len(items))
+	for _, item := range items {
+		entries = append(entries, item)
+	}
+	return entries
+}
+
+func (t *ForgeTable) BuildTable(entries []Rowable) {
 	var columns []table.Column
-	for _, col := range tableHeaders {
+	for _, col := range t.headers {
 		columns = append(columns, table.Column{Title: col.Title, Width: col.Width})
 	}
 
 	var rows []table.Row
-	for _, entry := range DiscoveredProjects {
-		rows = append(rows, table.Row{entry.Name, entry.Modified, entry.DirSize})
+	for _, entry := range entries {
+		rows = append(rows, entry.ToRow())
 	}
 
 	tableModel := table.New(
@@ -44,8 +65,13 @@ func initTable() ForgeTable {
 		table.WithFocused(true),
 	)
 
+    // ← Ne recrée PAS la table, juste met à jour columns et rows
+    // t.Table.SetColumns(columns)
+    // t.Table.SetRows(rows)
+    // t.Table.SetStyles(getStyle())
+
 	tableModel.SetStyles(getStyle())
-	return ForgeTable{Table: tableModel}
+	t.Table = tableModel
 }
 
 func (t *ForgeTable) ResizeColumns(termWidth int) {
@@ -53,12 +79,12 @@ func (t *ForgeTable) ResizeColumns(termWidth int) {
 	for key, col := range t.Table.Columns() {
 		cols = append(cols, table.Column{
 			Title: col.Title,
-			Width: int(float64(termWidth/2) * float64(tableHeaders[key].Width) / 100),
+			Width: int(float64(termWidth/2) * float64(t.headers[key].Width) / 100),
 		})
 	}
 	t.Table.SetColumns(cols)
 }
 
-func (t ForgeTable) Render() string {
+func (t *ForgeTable) Render() string {
 	return components.BaseStyle.Render(t.Table.View())
 }
