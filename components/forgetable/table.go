@@ -1,10 +1,7 @@
 package forgetable
 
 import (
-	// "fmt"
 	"hugom/forge/components"
-	// "hugom/forge/helper"
-
 	"charm.land/bubbles/v2/table"
 )
 
@@ -33,10 +30,10 @@ var MainTable = &ForgeTable{
 var DockerTable = &ForgeTable{
 	headers: []ColConfig{
 		{Title: "Container", Width: 20},
-		{Title: "Image", Width: 10},
+		{Title: "Image", Width: 15},
 		{Title: "State", Width: 10},
-		{Title: "Status", Width: 10},
-		{Title: "Port", Width: 10},
+		{Title: "Status", Width: 15},
+		{Title: "Port", Width: 15},
 	},
 }
 
@@ -65,10 +62,6 @@ func (t *ForgeTable) BuildTable(entries []Rowable) {
 		table.WithFocused(true),
 	)
 
-    // ← Ne recrée PAS la table, juste met à jour columns et rows
-    // t.Table.SetColumns(columns)
-    // t.Table.SetRows(rows)
-    // t.Table.SetStyles(getStyle())
 
 	tableModel.SetStyles(getStyle())
 	t.Table = tableModel

@@ -19,13 +19,13 @@ import (
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
-	"github.com/charmbracelet/x/ansi"
+	// "github.com/charmbracelet/x/ansi"
 )
 
 type rootModel struct {
 	projectsTable *forgetable.ForgeTable
 	commandOutput viewport.Model
-	dockerTable   *forgetable.ForgeTable
+	topWindow     *forgetable.ForgeTable
 	centerWindow  viewport.Model
 	bottomWindow  viewport.Model
 	helpBar       help.Model
@@ -50,11 +50,10 @@ func initialModel() rootModel {
 
 	discoveredProjects := projects.DiscoverProjects()
 	forgetable.MainTable.BuildTable(forgetable.ToRowable(discoveredProjects))
-	forgetable.DockerTable.BuildTable(forgetable.ToRowable(discoveredProjects))
 	return rootModel{
 		projectsTable: forgetable.MainTable,
 		commandOutput: commandOutput,
-		dockerTable:   forgetable.DockerTable,
+		topWindow:     forgetable.DockerTable,
 		centerWindow:  viewport.New(),
 		bottomWindow:  viewport.New(),
 		helpBar:       help.New(),
@@ -90,9 +89,9 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "s":
 			return m, docker.DockerComposeInspect(selectedProject, "")
 		case "up", "down":
-			m.projectsTable.Table, cmd = m.projectsTable.Table.Update(msg)
+			m.projectsTable.Table, _ = m.projectsTable.Table.Update(msg)
 			selected := m.projectsTable.Table.SelectedRow()[0]
-			return m, tea.Batch(docker.DockerComposeInspect(selected, ""), cmd)
+			return m, docker.DockerComposeInspect(selected, "")
 		case "k":
 			m.commandOutput.HalfPageUp()
 			return m, nil
@@ -117,7 +116,7 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.commandOutput.SetHeight(int(leftPanelBottomWinHeight))
 
 		for key, rigthPanelWindow := range []*viewport.Model{&m.centerWindow, &m.bottomWindow} {
-			rigthPanelWindow.SetHeight(int((rightPanelWinHeight * 0.25)))
+			rigthPanelWindow.SetHeight(int((rightPanelWinHeight * 0.20)))
 			if key == 0 {
 				rigthPanelWindow.SetHeight(int(rightPanelWinHeight * 0.5))
 			}
@@ -132,7 +131,7 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case docker.NoDockerFileMsg:
 		stringBuilder.Reset()
 		fmt.Fprint(&stringBuilder, msg.Message)
-		m.commandOutput.SetContent(ansi.Wordwrap(stringBuilder.String(), m.dockerTable.Table.Width(), ""))
+		// m.topWindow.SetContent(ansi.Wordwrap(stringBuilder.String(), m.topWindow.Width(), ""))
 		return m, nil
 	case docker.ContainerInspectMsg:
 		stringBuilder.Reset()
@@ -142,15 +141,12 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if len(msg.Containers) == 0 {
 			fmt.Fprint(&stringBuilder, "Aucun conteneur monté :\nTapez u pour initialiser l'environnement Docker.")
 		} else {
-			helper.LogToDebug(fmt.Sprintf("BuildTable appelé avec %d entries", len(msg.Containers)))
-			m.dockerTable.Table, cmd = m.dockerTable.Table.Update(msg)
-			// m.dockerTable.BuildTable(forgetable.ToRowable(msg.Containers))
-			helper.LogToDebug(fmt.Sprintf("Rows après BuildTable: %+v", m.dockerTable.Table.Rows()))
+			helper.LogToDebug(fmt.Sprintf("%v", msg))
+			m.topWindow.BuildTable(forgetable.ToRowable(msg.Containers))
+			m.topWindow.Table.SetHeight(10) // Compute dynamic value
+			m.topWindow.Table.SetWidth(85)  // Compute dynamic value
 		}
-
-		m.commandOutput.SetContent(ansi.Wordwrap(stringBuilder.String(), m.dockerTable.Table.Width(), ""))
-		// m.dockerTable.Table, cmd = m.dockerTable.Table.Update(msg)
-		return m, nil
+		return m, cmd
 	case docker.ContainerStateMsg:
 		var cmd tea.Cmd
 		if !msg.IsRunning {
@@ -184,7 +180,7 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m rootModel) View() tea.View {
 	tableRender := m.projectsTable.Render()
 	outputRender := c.BaseStyle.Render(m.commandOutput.View())
-	topMonitoringRender := m.dockerTable.Render()
+	topMonitoringRender := m.topWindow.Render()
 	centerMonitoringRender := c.BaseStyle.Render(m.centerWindow.View())
 	bottomMonitoringRender := c.BaseStyle.Render(m.bottomWindow.View())
 	helpRender := helpbar.GetStyle().Render(m.helpBar.ShortHelpView(helpbar.Keys.ShortHelp()))
