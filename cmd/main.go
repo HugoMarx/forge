@@ -3,11 +3,9 @@ package main
 import (
 	// "encoding/json"
 	"fmt"
-	"log"
 	"os"
 	"strings"
 
-	c "hugom/forge/components"
 	"hugom/forge/components/forgetable"
 	"hugom/forge/components/helpbar"
 	"hugom/forge/docker"
@@ -15,20 +13,24 @@ import (
 	"hugom/forge/helper"
 	"hugom/forge/projects"
 
+	c "hugom/forge/components"
+
 	"charm.land/bubbles/v2/help"
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
-	// "github.com/charmbracelet/x/ansi"
+	"github.com/charmbracelet/x/ansi"
 )
 
 type rootModel struct {
 	projectsTable *forgetable.ForgeTable
 	commandOutput viewport.Model
-	topWindow     *forgetable.ForgeTable
+	dockerTable   *forgetable.ForgeTable
+	topWindow     viewport.Model
 	centerWindow  viewport.Model
 	bottomWindow  viewport.Model
 	helpBar       help.Model
+	layout        helper.Layout
 }
 
 func main() {
@@ -53,7 +55,8 @@ func initialModel() rootModel {
 	return rootModel{
 		projectsTable: forgetable.MainTable,
 		commandOutput: commandOutput,
-		topWindow:     forgetable.DockerTable,
+		dockerTable:   forgetable.DockerTable,
+		topWindow:     viewport.New(),
 		centerWindow:  viewport.New(),
 		bottomWindow:  viewport.New(),
 		helpBar:       help.New(),
@@ -101,26 +104,21 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case tea.WindowSizeMsg:
-		leftPanelWidth := (msg.Width / 2) + 5
-		rightPanelWidth := (msg.Width - leftPanelWidth) - 5
-
-		leftPanelTopWinHeight := msg.Height / 2
-		leftPanelBottomWinHeight := float64(msg.Height-leftPanelTopWinHeight) - (float64(msg.Height) * float64(0.1))
-		rightPanelWinHeight := float64(msg.Height) - (float64(msg.Height) * float64(0.1))
+		m.layout.ComputeLayoutDimensions(msg)
 
 		m.projectsTable.ResizeColumns(msg.Width)
-		m.projectsTable.Table.SetWidth(leftPanelWidth)
-		m.projectsTable.Table.SetHeight(leftPanelTopWinHeight)
+		m.projectsTable.Table.SetWidth(m.layout.LeftPanelWidth)
+		m.projectsTable.Table.SetHeight(m.layout.LeftPanelTopWinHeight)
 
-		m.commandOutput.SetWidth(leftPanelWidth)
-		m.commandOutput.SetHeight(int(leftPanelBottomWinHeight))
+		m.commandOutput.SetWidth(m.layout.LeftPanelWidth)
+		m.commandOutput.SetHeight(m.layout.LeftPanelBottomWinHeight)
 
-		for key, rigthPanelWindow := range []*viewport.Model{&m.centerWindow, &m.bottomWindow} {
-			rigthPanelWindow.SetHeight(int((rightPanelWinHeight * 0.20)))
+		for key, rigthPanelWindow := range []*viewport.Model{&m.topWindow, &m.centerWindow, &m.bottomWindow} {
+			rigthPanelWindow.SetHeight(int(float64(m.layout.RightPanelWinHeight) * 0.2))
 			if key == 0 {
-				rigthPanelWindow.SetHeight(int(rightPanelWinHeight * 0.5))
+				rigthPanelWindow.SetHeight(int(float64(m.layout.RightPanelWinHeight) * 0.5))
 			}
-			rigthPanelWindow.SetWidth(rightPanelWidth)
+			rigthPanelWindow.SetWidth(m.layout.RightPanelWidth)
 		}
 
 	case forgemsg.CmdSuccessMsg:
@@ -131,20 +129,16 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case docker.NoDockerFileMsg:
 		stringBuilder.Reset()
 		fmt.Fprint(&stringBuilder, msg.Message)
-		// m.topWindow.SetContent(ansi.Wordwrap(stringBuilder.String(), m.topWindow.Width(), ""))
+		m.topWindow.SetContent(ansi.Wordwrap(stringBuilder.String(), m.topWindow.Width(), ""))
 		return m, nil
 	case docker.ContainerInspectMsg:
 		stringBuilder.Reset()
-		fmt.Fprintf(&stringBuilder, "%+v", msg.Containers)
-		log.SetOutput(&stringBuilder)
-
-		if len(msg.Containers) == 0 {
+		m.dockerTable.BuildTable(forgetable.ToRowable(msg.Containers))
+		m.dockerTable.Table.SetHeight(int(float64(m.layout.RightPanelWinHeight) * 0.5)) // Compute dynamic value
+		m.dockerTable.Table.SetWidth(85)  // Compute dynamic value
+		if !m.dockerTable.HasData {
 			fmt.Fprint(&stringBuilder, "Aucun conteneur monté :\nTapez u pour initialiser l'environnement Docker.")
-		} else {
-			helper.LogToDebug(fmt.Sprintf("%v", msg))
-			m.topWindow.BuildTable(forgetable.ToRowable(msg.Containers))
-			m.topWindow.Table.SetHeight(10) // Compute dynamic value
-			m.topWindow.Table.SetWidth(85)  // Compute dynamic value
+			m.topWindow.SetContent(ansi.Wordwrap(stringBuilder.String(), m.topWindow.Width(), ""))
 		}
 		return m, cmd
 	case docker.ContainerStateMsg:
@@ -180,7 +174,13 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m rootModel) View() tea.View {
 	tableRender := m.projectsTable.Render()
 	outputRender := c.BaseStyle.Render(m.commandOutput.View())
-	topMonitoringRender := m.topWindow.Render()
+	var topMonitoringRender string
+	if m.dockerTable.HasData {
+		topMonitoringRender = m.dockerTable.Render()
+	} else {
+		topMonitoringRender = c.BaseStyle.Render(m.topWindow.View())
+	}
+	helper.LogToDebug(fmt.Sprintf("%v", topMonitoringRender))
 	centerMonitoringRender := c.BaseStyle.Render(m.centerWindow.View())
 	bottomMonitoringRender := c.BaseStyle.Render(m.bottomWindow.View())
 	helpRender := helpbar.GetStyle().Render(m.helpBar.ShortHelpView(helpbar.Keys.ShortHelp()))

@@ -1,8 +1,8 @@
 package forgetable
 
 import (
-	"hugom/forge/components"
 	"charm.land/bubbles/v2/table"
+	"hugom/forge/components"
 )
 
 type Rowable interface {
@@ -17,6 +17,7 @@ type ColConfig struct {
 type ForgeTable struct {
 	headers []ColConfig
 	Table   table.Model
+	HasData bool
 }
 
 var MainTable = &ForgeTable{
@@ -37,7 +38,7 @@ var DockerTable = &ForgeTable{
 	},
 }
 
-func ToRowable [T Rowable](items []T) []Rowable {
+func ToRowable[T Rowable](items []T) []Rowable {
 	entries := make([]Rowable, 0, len(items))
 	for _, item := range items {
 		entries = append(entries, item)
@@ -56,12 +57,13 @@ func (t *ForgeTable) BuildTable(entries []Rowable) {
 		rows = append(rows, entry.ToRow())
 	}
 
+	t.HasData = len(rows) != 0
+
 	tableModel := table.New(
 		table.WithColumns(columns),
 		table.WithRows(rows),
 		table.WithFocused(true),
 	)
-
 
 	tableModel.SetStyles(getStyle())
 	t.Table = tableModel
