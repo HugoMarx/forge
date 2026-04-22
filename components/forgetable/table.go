@@ -1,11 +1,8 @@
 package forgetable
 
 import (
-	// "fmt"
-	"hugom/forge/components"
-	// "hugom/forge/helper"
-
 	"charm.land/bubbles/v2/table"
+	"hugom/forge/components"
 )
 
 type Rowable interface {
@@ -20,6 +17,7 @@ type ColConfig struct {
 type ForgeTable struct {
 	headers []ColConfig
 	Table   table.Model
+	HasData bool
 }
 
 var MainTable = &ForgeTable{
@@ -33,14 +31,14 @@ var MainTable = &ForgeTable{
 var DockerTable = &ForgeTable{
 	headers: []ColConfig{
 		{Title: "Container", Width: 20},
-		{Title: "Image", Width: 10},
+		{Title: "Image", Width: 15},
 		{Title: "State", Width: 10},
-		{Title: "Status", Width: 10},
-		{Title: "Port", Width: 10},
+		{Title: "Status", Width: 15},
+		{Title: "Port", Width: 15},
 	},
 }
 
-func ToRowable [T Rowable](items []T) []Rowable {
+func ToRowable[T Rowable](items []T) []Rowable {
 	entries := make([]Rowable, 0, len(items))
 	for _, item := range items {
 		entries = append(entries, item)
@@ -59,16 +57,13 @@ func (t *ForgeTable) BuildTable(entries []Rowable) {
 		rows = append(rows, entry.ToRow())
 	}
 
+	t.HasData = len(rows) != 0
+
 	tableModel := table.New(
 		table.WithColumns(columns),
 		table.WithRows(rows),
 		table.WithFocused(true),
 	)
-
-    // ← Ne recrée PAS la table, juste met à jour columns et rows
-    // t.Table.SetColumns(columns)
-    // t.Table.SetRows(rows)
-    // t.Table.SetStyles(getStyle())
 
 	tableModel.SetStyles(getStyle())
 	t.Table = tableModel

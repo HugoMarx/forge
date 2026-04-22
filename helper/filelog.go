@@ -7,10 +7,9 @@ import (
 
 const logDir = "./log/debug.log"
 
-func LogToDebug(output  string) {
-	logFile, err := os.OpenFile(logDir, os.O_RDWR | os.O_CREATE, 0644)
-
-	if  err != nil {
+func LogToDebug(output string) {
+	logFile, err := os.OpenFile(logDir, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0o644)
+	if err != nil {
 		log.Panic(err.Error())
 	}
 

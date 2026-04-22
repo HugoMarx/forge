@@ -7,7 +7,7 @@ import (
 )
 
 const (
-	RootDir string = "/home/hugom/Projects"
+	RootDir string = "/home/hugo/Projects"
 )
 
 type Project struct {
