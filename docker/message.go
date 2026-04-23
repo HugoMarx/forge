@@ -25,8 +25,9 @@ type ContainerInspectMsg struct {
 	Output     []byte
 }
 
-type ContainerStateMsg struct {
+type DockerStateMsg struct {
 	Project   string
+	Containers []Container
 	Error     error
 	IsRunning bool
 	Output    []byte

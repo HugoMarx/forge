@@ -16,6 +16,7 @@ import (
 	c "hugom/forge/components"
 
 	"charm.land/bubbles/v2/help"
+	"charm.land/bubbles/v2/spinner"
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -29,6 +30,7 @@ type rootModel struct {
 	topWindow     viewport.Model
 	centerWindow  viewport.Model
 	bottomWindow  viewport.Model
+	spinner       spinner.Model
 	helpBar       help.Model
 	layout        helper.Layout
 }
@@ -51,7 +53,7 @@ func initialModel() rootModel {
 	commandOutput.SetContent(startupMessage)
 
 	discoveredProjects := projects.DiscoverProjects()
-	forgetable.MainTable.BuildTable(forgetable.ToRowable(discoveredProjects))
+	forgetable.MainTable.BuildTable(forgetable.ToRowable(discoveredProjects), helper.Layout{})
 	return rootModel{
 		projectsTable: forgetable.MainTable,
 		commandOutput: commandOutput,
@@ -59,12 +61,13 @@ func initialModel() rootModel {
 		topWindow:     viewport.New(),
 		centerWindow:  viewport.New(),
 		bottomWindow:  viewport.New(),
+		spinner:       spinner.New(spinner.WithSpinner(spinner.Pulse)),
 		helpBar:       help.New(),
 	}
 }
 
 func (m rootModel) Init() tea.Cmd {
-	return nil
+	return m.spinner.Tick
 }
 
 func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -107,6 +110,7 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.layout.ComputeLayoutDimensions(msg)
 
 		m.projectsTable.ResizeColumns(msg.Width)
+		m.dockerTable.ResizeColumns(msg.Width)
 		m.projectsTable.Table.SetWidth(m.layout.LeftPanelWidth)
 		m.projectsTable.Table.SetHeight(m.layout.LeftPanelTopWinHeight)
 
@@ -130,18 +134,16 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		stringBuilder.Reset()
 		fmt.Fprint(&stringBuilder, msg.Message)
 		m.topWindow.SetContent(ansi.Wordwrap(stringBuilder.String(), m.topWindow.Width(), ""))
-		return m, nil
+		return m, m.spinner.Tick
 	case docker.ContainerInspectMsg:
 		stringBuilder.Reset()
-		m.dockerTable.BuildTable(forgetable.ToRowable(msg.Containers))
-		m.dockerTable.Table.SetHeight(int(float64(m.layout.RightPanelWinHeight) * 0.5)) // Compute dynamic value
-		m.dockerTable.Table.SetWidth(85)  // Compute dynamic value
+		m.dockerTable.BuildTable(forgetable.ToRowable(msg.Containers), m.layout)
 		if !m.dockerTable.HasData {
 			fmt.Fprint(&stringBuilder, "Aucun conteneur monté :\nTapez u pour initialiser l'environnement Docker.")
 			m.topWindow.SetContent(ansi.Wordwrap(stringBuilder.String(), m.topWindow.Width(), ""))
 		}
-		return m, cmd
-	case docker.ContainerStateMsg:
+		return m, nil
+	case docker.DockerStateMsg:
 		var cmd tea.Cmd
 		if !msg.IsRunning {
 			fmt.Fprint(&stringBuilder, string(msg.Output))
@@ -151,6 +153,7 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				fmt.Fprint(&stringBuilder, string(msg.Output))
 				fmt.Fprintf(&stringBuilder, "%s is now running in Docker ! 🐋\n", msg.Project)
 
+				cmd = docker.DockerComposeInspect(msg.Project, "")
 				if value, ok := msg.Options["launch"]; ok {
 					if withLaunch, ok := value.(bool); ok && withLaunch {
 						cmd = helper.LaunchWorkspace(msg.Project)
@@ -159,6 +162,7 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		m.commandOutput.SetContent(stringBuilder.String())
+		m.dockerTable.BuildTable(forgetable.ToRowable(msg.Containers), m.layout)
 		return m, cmd
 	case forgemsg.CmdErrorMsg:
 		outputContent := m.commandOutput.GetContent()
@@ -166,6 +170,13 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.commandOutput.SetContent(outputContent + "\n" + strings.Join(msg.Debug, "\n") + "\n\n\n")
 		m.commandOutput.GotoBottom()
 		return m, nil
+	case spinner.TickMsg:
+		var cmd tea.Cmd
+		m.spinner, cmd = m.spinner.Update(msg)
+		if !m.dockerTable.HasData {
+			m.topWindow.SetContent(m.spinner.View())
+		}
+		return m, cmd
 	}
 	m.projectsTable.Table, cmd = m.projectsTable.Table.Update(msg)
 	return m, cmd
@@ -180,7 +191,6 @@ func (m rootModel) View() tea.View {
 	} else {
 		topMonitoringRender = c.BaseStyle.Render(m.topWindow.View())
 	}
-	helper.LogToDebug(fmt.Sprintf("%v", topMonitoringRender))
 	centerMonitoringRender := c.BaseStyle.Render(m.centerWindow.View())
 	bottomMonitoringRender := c.BaseStyle.Render(m.bottomWindow.View())
 	helpRender := helpbar.GetStyle().Render(m.helpBar.ShortHelpView(helpbar.Keys.ShortHelp()))
