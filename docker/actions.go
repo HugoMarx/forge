@@ -63,7 +63,9 @@ func DockerComposeUp(projectName string, launch bool) tea.Cmd {
 			return forgemsg.CmdErrorMsg{Error: err, Debug: []string{}}
 		}
 
-		return ContainerStateMsg{Project: projectName, Error: nil, IsRunning: true, Output: output, Options: map[string]any{"launch": launch}}
+
+
+		return DockerStateMsg{Project: projectName, Error: nil, IsRunning: true, Output: output, Options: map[string]any{"launch": launch}}
 	}
 }
 
@@ -75,7 +77,7 @@ func DockerComposeDown(projectName string, options ...[]string) tea.Cmd {
 		if err != nil {
 			return forgemsg.CmdErrorMsg{Error: err, Debug: []string{}}
 		}
-		return ContainerStateMsg{Project: projectName, Error: nil, IsRunning: false, Output: output}
+		return DockerStateMsg{Project: projectName, Error: nil, IsRunning: false, Output: output}
 	}
 }
 

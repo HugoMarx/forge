@@ -1,8 +1,10 @@
 package forgetable
 
 import (
-	"charm.land/bubbles/v2/table"
 	"hugom/forge/components"
+	"hugom/forge/helper"
+
+	"charm.land/bubbles/v2/table"
 )
 
 type Rowable interface {
@@ -46,7 +48,7 @@ func ToRowable[T Rowable](items []T) []Rowable {
 	return entries
 }
 
-func (t *ForgeTable) BuildTable(entries []Rowable) {
+func (t *ForgeTable) BuildTable(entries []Rowable, layout helper.Layout) {
 	var columns []table.Column
 	for _, col := range t.headers {
 		columns = append(columns, table.Column{Title: col.Title, Width: col.Width})
@@ -56,7 +58,6 @@ func (t *ForgeTable) BuildTable(entries []Rowable) {
 	for _, entry := range entries {
 		rows = append(rows, entry.ToRow())
 	}
-
 	t.HasData = len(rows) != 0
 
 	tableModel := table.New(
@@ -66,6 +67,8 @@ func (t *ForgeTable) BuildTable(entries []Rowable) {
 	)
 
 	tableModel.SetStyles(getStyle())
+	tableModel.SetHeight(int(float64(layout.RightPanelWinHeight) * 0.5))
+	tableModel.SetWidth(layout.RightPanelWidth)
 	t.Table = tableModel
 }
 
