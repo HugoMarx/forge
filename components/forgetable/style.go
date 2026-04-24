@@ -5,7 +5,7 @@ import (
 	"charm.land/lipgloss/v2"
 )
 
-func getStyle() table.Styles {
+func GetStyle() table.Styles {
 	tableStyle := table.DefaultStyles()
 	tableStyle.Header = tableStyle.Header.
 		BorderStyle(lipgloss.NormalBorder()).

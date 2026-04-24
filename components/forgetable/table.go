@@ -17,9 +17,10 @@ type ColConfig struct {
 }
 
 type ForgeTable struct {
-	headers []ColConfig
-	Table   table.Model
-	HasData bool
+	headers   []ColConfig
+	Table     table.Model
+	HasData   bool
+	IsLoading bool
 }
 
 var MainTable = &ForgeTable{
@@ -66,7 +67,7 @@ func (t *ForgeTable) BuildTable(entries []Rowable, layout helper.Layout) {
 		table.WithFocused(true),
 	)
 
-	tableModel.SetStyles(getStyle())
+	tableModel.SetStyles(GetStyle())
 	tableModel.SetHeight(int(float64(layout.RightPanelWinHeight) * 0.5))
 	tableModel.SetWidth(layout.RightPanelWidth)
 	t.Table = tableModel

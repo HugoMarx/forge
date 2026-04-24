@@ -1,7 +1,6 @@
 package main
 
 import (
-	// "encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -61,8 +60,10 @@ func initialModel() rootModel {
 		topWindow:     viewport.New(),
 		centerWindow:  viewport.New(),
 		bottomWindow:  viewport.New(),
-		spinner:       spinner.New(spinner.WithSpinner(spinner.Pulse)),
-		helpBar:       help.New(),
+		spinner: spinner.New(
+			spinner.WithSpinner(spinner.Pulse),
+			spinner.WithStyle(lipgloss.NewStyle().Foreground(lipgloss.Color("222")))),
+		helpBar: help.New(),
 	}
 }
 
@@ -80,14 +81,18 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "ctrl+c", "q":
 			return m, tea.Quit
-
 		case "enter":
 			return m, helper.LaunchWorkspace(selectedProject)
 		case "u":
+			helper.LogToDebug(m.dockerTable.HasData)
+			m.dockerTable.IsLoading = true
 			return m, docker.DockerComposeUp(selectedProject, false)
 		case "U":
+			m.dockerTable.IsLoading = true
 			return m, docker.DockerComposeUp(selectedProject, true)
 		case "d":
+			m.dockerTable.IsLoading = true
+			m.dockerTable.HasData = false
 			stringBuilder.Reset()
 			fmt.Fprintf(&stringBuilder, "%s shutting down ! 🐋\n", selectedProject)
 			m.commandOutput.SetContent(stringBuilder.String())
@@ -132,9 +137,10 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, cmd
 	case docker.NoDockerFileMsg:
 		stringBuilder.Reset()
+		m.dockerTable.HasData = false
 		fmt.Fprint(&stringBuilder, msg.Message)
 		m.topWindow.SetContent(ansi.Wordwrap(stringBuilder.String(), m.topWindow.Width(), ""))
-		return m, m.spinner.Tick
+		return m, nil
 	case docker.ContainerInspectMsg:
 		stringBuilder.Reset()
 		m.dockerTable.BuildTable(forgetable.ToRowable(msg.Containers), m.layout)
@@ -144,25 +150,23 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case docker.DockerStateMsg:
-		var cmd tea.Cmd
+		cmd = docker.DockerComposeInspect(msg.Project, "")
 		if !msg.IsRunning {
 			fmt.Fprint(&stringBuilder, string(msg.Output))
 		} else {
 			stringBuilder.Reset()
-			if msg.IsRunning {
-				fmt.Fprint(&stringBuilder, string(msg.Output))
-				fmt.Fprintf(&stringBuilder, "%s is now running in Docker ! 🐋\n", msg.Project)
+			fmt.Fprint(&stringBuilder, string(msg.Output))
+			fmt.Fprintf(&stringBuilder, "%s is now running in Docker ! 🐋\n", msg.Project)
 
-				cmd = docker.DockerComposeInspect(msg.Project, "")
-				if value, ok := msg.Options["launch"]; ok {
-					if withLaunch, ok := value.(bool); ok && withLaunch {
-						cmd = helper.LaunchWorkspace(msg.Project)
-					}
+			if value, ok := msg.Options["launch"]; ok {
+				if withLaunch, ok := value.(bool); ok && withLaunch {
+					cmd = helper.LaunchWorkspace(msg.Project)
 				}
 			}
+			m.dockerTable.BuildTable(forgetable.ToRowable(msg.Containers), m.layout)
 		}
 		m.commandOutput.SetContent(stringBuilder.String())
-		m.dockerTable.BuildTable(forgetable.ToRowable(msg.Containers), m.layout)
+		m.dockerTable.IsLoading = false
 		return m, cmd
 	case forgemsg.CmdErrorMsg:
 		outputContent := m.commandOutput.GetContent()
@@ -173,8 +177,8 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case spinner.TickMsg:
 		var cmd tea.Cmd
 		m.spinner, cmd = m.spinner.Update(msg)
-		if !m.dockerTable.HasData {
-			m.topWindow.SetContent(m.spinner.View())
+		if m.dockerTable.IsLoading {
+			m.topWindow.SetContent(" " + m.spinner.View() + " Loading...")
 		}
 		return m, cmd
 	}
@@ -183,14 +187,17 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m rootModel) View() tea.View {
-	tableRender := m.projectsTable.Render()
 	outputRender := c.BaseStyle.Render(m.commandOutput.View())
 	var topMonitoringRender string
 	if m.dockerTable.HasData {
+		s := forgetable.GetStyle()
+		s.Selected = lipgloss.NewStyle() // style vide = pas de highlight
+		m.dockerTable.Table.SetStyles(s)
 		topMonitoringRender = m.dockerTable.Render()
 	} else {
 		topMonitoringRender = c.BaseStyle.Render(m.topWindow.View())
 	}
+	tableRender := m.projectsTable.Render()
 	centerMonitoringRender := c.BaseStyle.Render(m.centerWindow.View())
 	bottomMonitoringRender := c.BaseStyle.Render(m.bottomWindow.View())
 	helpRender := helpbar.GetStyle().Render(m.helpBar.ShortHelpView(helpbar.Keys.ShortHelp()))
