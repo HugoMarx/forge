@@ -20,8 +20,8 @@ func DockerComposeInspect(projectName string, format string) tea.Cmd {
 			format = "{{json .}}"
 		}
 
-		projectDir := filepath.Join(projects.RootDir, projectName)
-		if !hasDockerComposeFile(projectDir) {
+		hasCompose, projectDir := HasDockerComposeFile(projectName)
+		if !hasCompose {
 			return NoDockerFileMsg{fmt.Sprintln("Aucune config Docker détectée dans", projectDir, "!")}
 		}
 
@@ -63,8 +63,6 @@ func DockerComposeUp(projectName string, launch bool) tea.Cmd {
 			return forgemsg.CmdErrorMsg{Error: err, Debug: []string{}}
 		}
 
-
-
 		return DockerStateMsg{Project: projectName, Error: nil, IsRunning: true, Output: output, Options: map[string]any{"launch": launch}}
 	}
 }
@@ -81,7 +79,8 @@ func DockerComposeDown(projectName string, options ...[]string) tea.Cmd {
 	}
 }
 
-func hasDockerComposeFile(dir string) bool {
-	_, err := os.Stat(fmt.Sprintf("%s/docker-compose.yml", dir))
-	return !os.IsNotExist(err)
+func HasDockerComposeFile(projectName string) (bool, string) {
+	projectDir := filepath.Join(projects.RootDir, projectName)
+	_, err := os.Stat(fmt.Sprintf("%s/docker-compose.yml", projectDir))
+	return !os.IsNotExist(err), projectDir
 }

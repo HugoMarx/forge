@@ -84,13 +84,25 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "enter":
 			return m, helper.LaunchWorkspace(selectedProject)
 		case "u":
-			helper.LogToDebug(m.dockerTable.HasData)
+			hasCompose, _ := docker.HasDockerComposeFile(selectedProject)
+			if !hasCompose {
+				return m, nil
+			}
 			m.dockerTable.IsLoading = true
 			return m, docker.DockerComposeUp(selectedProject, false)
 		case "U":
+			hasCompose, _ := docker.HasDockerComposeFile(selectedProject)
+			if !hasCompose {
+				return m, nil
+			}
+
 			m.dockerTable.IsLoading = true
 			return m, docker.DockerComposeUp(selectedProject, true)
 		case "d":
+			hasCompose, _ := docker.HasDockerComposeFile(selectedProject)
+			if !hasCompose {
+				return m, nil
+			}
 			m.dockerTable.IsLoading = true
 			m.dockerTable.HasData = false
 			stringBuilder.Reset()
@@ -98,6 +110,10 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.commandOutput.SetContent(stringBuilder.String())
 			return m, docker.DockerComposeDown(selectedProject)
 		case "s":
+			hasCompose, _ := docker.HasDockerComposeFile(selectedProject)
+			if !hasCompose {
+				return m, nil
+			}
 			return m, docker.DockerComposeInspect(selectedProject, "")
 		case "up", "down":
 			m.projectsTable.Table, _ = m.projectsTable.Table.Update(msg)
@@ -169,9 +185,8 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.dockerTable.IsLoading = false
 		return m, cmd
 	case forgemsg.CmdErrorMsg:
-		outputContent := m.commandOutput.GetContent()
-		outputContent += fmt.Sprintln(msg.Error.Error())
-		m.commandOutput.SetContent(outputContent + "\n" + strings.Join(msg.Debug, "\n") + "\n\n\n")
+		outputContent := fmt.Sprintln(msg.Error.Error())
+		m.commandOutput.SetContent(outputContent)
 		m.commandOutput.GotoBottom()
 		return m, nil
 	case spinner.TickMsg:

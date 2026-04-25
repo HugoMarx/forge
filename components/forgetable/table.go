@@ -59,6 +59,7 @@ func (t *ForgeTable) BuildTable(entries []Rowable, layout helper.Layout) {
 	for _, entry := range entries {
 		rows = append(rows, entry.ToRow())
 	}
+
 	t.HasData = len(rows) != 0
 
 	tableModel := table.New(
