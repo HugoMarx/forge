@@ -4,6 +4,9 @@ import (
 	"fmt"
 	"os"
 	"time"
+
+	"hugom/forge/config"
+
 )
 
 const (
@@ -20,9 +23,13 @@ func (p Project) ToRow() []string {
 	return []string{p.Name, p.Modified, p.DirSize}
 }
 
-func DiscoverProjects() []Project {
+func DiscoverProjects()(projects []Project,err error) {
+	config, err := config.GetConfig()
+	if err != nil {
+		 return nil, fmt.Errorf("%w", err)
+	}
 	var discoveredProjects []Project
-	entries, err := os.ReadDir(RootDir)
+	entries, err := os.ReadDir(os.ExpandEnv(config.RootDir))
 	if err != nil {
 		fmt.Println(err)
 	}
@@ -45,7 +52,7 @@ func DiscoverProjects() []Project {
 			"n/a", // dirSize,
 		})
 	}
-	return discoveredProjects
+	return discoveredProjects, nil
 }
 
 // Temporairement inactive.

@@ -10,6 +10,7 @@ import (
 	"hugom/forge/docker"
 	"hugom/forge/forgemsg"
 	"hugom/forge/helper"
+
 	"hugom/forge/projects"
 
 	c "hugom/forge/components"
@@ -34,6 +35,7 @@ type rootModel struct {
 	layout        helper.Layout
 }
 
+
 func main() {
 	p := tea.NewProgram(initialModel())
 	if _, err := p.Run(); err != nil {
@@ -51,7 +53,7 @@ func initialModel() rootModel {
 	startupMessage := " Welcome to" + fmt.Sprintf("\x1b[31m%s\x1b[0m\n", forgeTitle)
 	commandOutput.SetContent(startupMessage)
 
-	discoveredProjects := projects.DiscoverProjects()
+	discoveredProjects, _ := projects.DiscoverProjects()
 	forgetable.MainTable.BuildTable(forgetable.ToRowable(discoveredProjects), helper.Layout{})
 	return rootModel{
 		projectsTable: forgetable.MainTable,
