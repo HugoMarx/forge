@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"hugom/forge/config"
-
 )
 
 const (
@@ -23,21 +22,22 @@ func (p Project) ToRow() []string {
 	return []string{p.Name, p.Modified, p.DirSize}
 }
 
-func DiscoverProjects()(projects []Project,err error) {
+func DiscoverProjects() (projects []Project, err error) {
 	config, err := config.GetConfig()
 	if err != nil {
-		 return nil, fmt.Errorf("%w", err)
+		return nil, fmt.Errorf("fichier de config introuvable : %w", err)
 	}
+
 	var discoveredProjects []Project
 	entries, err := os.ReadDir(os.ExpandEnv(config.RootDir))
 	if err != nil {
-		fmt.Println(err)
+		return nil, err
 	}
 
 	for _, entry := range entries {
 		entryInfo, err := entry.Info()
 		if err != nil {
-			fmt.Println(err)
+			return nil, err
 		}
 
 		// TODO Optimiser l'execution
@@ -52,6 +52,7 @@ func DiscoverProjects()(projects []Project,err error) {
 			"n/a", // dirSize,
 		})
 	}
+
 	return discoveredProjects, nil
 }
 

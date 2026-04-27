@@ -20,6 +20,6 @@ func (layout *Layout) ComputeLayoutDimensions(msg tea.WindowSizeMsg) {
 	layout.RightPanelWidth = int((int(msg.Width) - layout.LeftPanelWidth) - 5)
 
 	layout.LeftPanelTopWinHeight = int(msg.Height / 2)
-	layout.LeftPanelBottomWinHeight = int(int(msg.Height)-layout.LeftPanelTopWinHeight) - (int(float64(msg.Height) * 0.2))
+	layout.LeftPanelBottomWinHeight = int(int(msg.Height)-layout.LeftPanelTopWinHeight) - (int(float64(msg.Height) * 0.14))
 	layout.RightPanelWinHeight = int(msg.Height) - (int(float64(msg.Height) * 0.2))
 }

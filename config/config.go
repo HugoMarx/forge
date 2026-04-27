@@ -1,8 +1,8 @@
 package config
 
 import (
-	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/BurntSushi/toml"
 )
@@ -12,13 +12,18 @@ type Config struct {
 }
 
 func GetConfig() (config Config, err error) {
-	fileContent, err := os.ReadFile("../config.toml")
+	configDir, err := os.UserConfigDir()
 	if err != nil {
-		return Config{}, fmt.Errorf("unable to read config: %w", err)
+		return Config{}, err
+	}
+	configPath := filepath.Join(configDir, "forge", "config.toml")
+	fileContent, err := os.ReadFile(configPath)
+	if err != nil {
+		return Config{}, err
 	}
 	_, err = toml.Decode(string(fileContent), &config)
 	if err != nil {
-		return Config{}, fmt.Errorf("unable to decode config: %w", err)
+		return Config{}, err
 	}
 
 	return config, nil

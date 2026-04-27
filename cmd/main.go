@@ -35,7 +35,6 @@ type rootModel struct {
 	layout        helper.Layout
 }
 
-
 func main() {
 	p := tea.NewProgram(initialModel())
 	if _, err := p.Run(); err != nil {
@@ -53,8 +52,13 @@ func initialModel() rootModel {
 	startupMessage := " Welcome to" + fmt.Sprintf("\x1b[31m%s\x1b[0m\n", forgeTitle)
 	commandOutput.SetContent(startupMessage)
 
-	discoveredProjects, _ := projects.DiscoverProjects()
+	discoveredProjects, err := projects.DiscoverProjects()
+	if err != nil {
+		commandOutput.SetContent(fmt.Errorf("%w", err).Error())
+	}
+
 	forgetable.MainTable.BuildTable(forgetable.ToRowable(discoveredProjects), helper.Layout{})
+
 	return rootModel{
 		projectsTable: forgetable.MainTable,
 		commandOutput: commandOutput,
@@ -74,12 +78,15 @@ func (m rootModel) Init() tea.Cmd {
 }
 
 func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	selectedProject := m.projectsTable.Table.SelectedRow()[0]
 	var cmd tea.Cmd
-
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:
+		selectedRow := m.projectsTable.Table.SelectedRow()
+		if len(selectedRow) == 0 {
+			return m, tea.Quit
+		}
 
+		selectedProject := selectedRow[0]
 		switch msg.String() {
 		case "ctrl+c", "q":
 			return m, tea.Quit
