@@ -7,6 +7,7 @@ import (
 
 	"hugom/forge/components/forgetable"
 	"hugom/forge/components/helpbar"
+	"hugom/forge/config"
 	"hugom/forge/docker"
 	"hugom/forge/forgemsg"
 	"hugom/forge/helper"
@@ -46,11 +47,16 @@ func main() {
 var stringBuilder strings.Builder
 
 func initialModel() rootModel {
+
 	commandOutput := viewport.New()
 	forgeTitle, _ := os.ReadFile("assets/forge.txt")
 	// TODO Utiliser les color helpers lipgloss
 	startupMessage := " Welcome to" + fmt.Sprintf("\x1b[31m%s\x1b[0m\n", forgeTitle)
 	commandOutput.SetContent(startupMessage)
+
+	if err := config.Load(); err != nil {
+		commandOutput.SetContent(err.Error())
+	}
 
 	discoveredProjects, err := projects.DiscoverProjects()
 	if err != nil {

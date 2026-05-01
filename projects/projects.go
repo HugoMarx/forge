@@ -1,15 +1,10 @@
 package projects
 
 import (
-	"fmt"
 	"os"
 	"time"
 
 	"hugom/forge/config"
-)
-
-const (
-	RootDir string = "/home/hugo/Projects"
 )
 
 type Project struct {
@@ -23,13 +18,8 @@ func (p Project) ToRow() []string {
 }
 
 func DiscoverProjects() (projects []Project, err error) {
-	config, err := config.GetConfig()
-	if err != nil {
-		return nil, fmt.Errorf("fichier de config introuvable : %w", err)
-	}
-
 	var discoveredProjects []Project
-	entries, err := os.ReadDir(os.ExpandEnv(config.RootDir))
+	entries, err := os.ReadDir(config.Config.RootDir)
 	if err != nil {
 		return nil, err
 	}
@@ -41,7 +31,7 @@ func DiscoverProjects() (projects []Project, err error) {
 		}
 
 		// TODO Optimiser l'execution
-		// dirSize, err := dirSize(RootDir + "/" + entry.Name())
+		// dirSize, err := dirSize(RootDir +Config "/" + entry.Name())
 		// if err != nil {
 		// 	fmt.Println(err)
 		// }

@@ -8,8 +8,8 @@ import (
 	"os/exec"
 	"path/filepath"
 
+	"hugom/forge/config"
 	"hugom/forge/forgemsg"
-	"hugom/forge/projects"
 
 	tea "charm.land/bubbletea/v2"
 )
@@ -53,10 +53,9 @@ func DockerComposeInspect(projectName string, format string) tea.Cmd {
 
 func DockerComposeUp(projectName string, launch bool) tea.Cmd {
 	DockerComposeDown(projectName) // On démonte systématiquement le container avant de le lancer.
-
 	return func() tea.Msg {
 		cmd := exec.Command("docker", "compose", "up", "-d")
-		cmd.Dir = filepath.Join(projects.RootDir, projectName)
+		cmd.Dir = filepath.Join(config.Config.RootDir, projectName)
 
 		output, err := cmd.CombinedOutput()
 		if err != nil {
@@ -70,7 +69,7 @@ func DockerComposeUp(projectName string, launch bool) tea.Cmd {
 func DockerComposeDown(projectName string, options ...[]string) tea.Cmd {
 	return func() tea.Msg {
 		cmd := exec.Command("docker", "compose", "down")
-		cmd.Dir = filepath.Join(projects.RootDir, projectName)
+		cmd.Dir = filepath.Join(config.Config.RootDir, projectName)
 		output, err := cmd.CombinedOutput()
 		if err != nil {
 			return forgemsg.CmdErrorMsg{Error: err, Debug: []string{}}
@@ -80,7 +79,7 @@ func DockerComposeDown(projectName string, options ...[]string) tea.Cmd {
 }
 
 func HasDockerComposeFile(projectName string) (bool, string) {
-	projectDir := filepath.Join(projects.RootDir, projectName)
+	projectDir := filepath.Join(config.Config.RootDir, projectName)
 	_, err := os.Stat(fmt.Sprintf("%s/docker-compose.yml", projectDir))
 	return !os.IsNotExist(err), projectDir
 }
